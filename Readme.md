@@ -26,15 +26,15 @@ LifeOS Backend is the REST API layer for the [LifeOS Frontend](https://github.co
 
 | Category | Tool | Version |
 |---|---|---|
-| Framework | FastAPI | Latest |
+| Framework | FastAPI | 0.128.8 |
 | Language | Python | 3.9+ |
 | ORM | SQLAlchemy | 2.x |
-| Migrations | Alembic | Latest |
 | Validation | Pydantic | v2 |
-| Authentication | JWT (httpOnly cookies) | — |
-| Password Hashing | bcrypt | — |
+| Authentication | JWT (httpOnly cookies) | python-jose 3.5.0 |
+| Password Hashing | bcrypt | passlib 1.7.4 + bcrypt 4.0.1 |
 | Database | MySQL | 9.x |
-| Server | Uvicorn | Latest |
+| Server | Uvicorn | 0.39.0 |
+| Email Validation | pydantic[email] | — |
 
 ---
 
@@ -60,8 +60,8 @@ HTTP Request
 - **Layered architecture** — routers never contain business logic; services never know about HTTP
 - **Pydantic v2** — strict request/response schema validation with clear error messages
 - **Stateless JWT auth** — tokens stored in httpOnly cookies, no server-side session
-- **Alembic migrations** — all schema changes are versioned and reproducible
 - **Response wrapper** — uniform `{ success, data, message }` shape across all endpoints
+- **bcrypt 4.0.1 pinned** — required for Python 3.9 compatibility with passlib
 
 ---
 
@@ -69,42 +69,28 @@ HTTP Request
 
 ```
 backend/
+├── .env                     # Environment variables (never commit)
+├── requirements.txt         # Python dependencies
 └── app/
-    ├── main.py              # Entry point — CORS config, router registration, lifespan
-    ├── config.py            # Pydantic settings from .env
-    ├── database.py          # SQLAlchemy engine, session factory, Base
+    ├── main.py              # Entry point — CORS config, router registration, table creation
+    ├── config.py            # Pydantic settings loaded from .env
+    ├── database.py          # SQLAlchemy engine, session factory, Base, get_db dependency
     │
     ├── models/              # ORM table definitions
-    │   ├── user.py
-    │   ├── task.py
-    │   ├── dsa_log.py
-    │   ├── fitness_log.py
-    │   └── streak.py
+    │   ├── __init__.py      # Exports all models
+    │   └── user.py          # User model
     │
     ├── schemas/             # Pydantic request/response schemas
-    │   ├── auth.py
-    │   ├── task.py
-    │   ├── dsa.py
-    │   ├── fitness.py
-    │   └── streak.py
+    │   └── user.py          # RegisterRequest, LoginRequest, UserResponse, AuthResponse
     │
     ├── routers/             # Route handlers (thin — delegate to services)
-    │   ├── auth.py
-    │   ├── tasks.py
-    │   ├── dsa.py
-    │   ├── fitness.py
-    │   └── streaks.py
+    │   └── auth.py          # /register, /login, /logout, /me
     │
-    ├── services/            # Business logic
-    │   ├── auth_service.py
-    │   ├── task_service.py
-    │   ├── dsa_service.py
-    │   ├── fitness_service.py
-    │   └── streak_service.py
+    ├── services/            # Business logic (to be built per feature)
     │
     └── utils/
-        ├── jwt.py           # Token creation, decoding, cookie helpers
-        └── response.py      # Uniform response wrapper
+        └── auth.py          # hash_password, verify_password, create_access_token,
+                             # decode_access_token, get_current_user
 ```
 
 ---
@@ -114,46 +100,52 @@ backend/
 ### Prerequisites
 
 - Python `3.9+`
-- MySQL `8+` running locally
+- MySQL `8+` or `9+` running locally
 - A database named `lifeos` already created
+
+### Create the database
+
+```bash
+mysql -u root -p
+```
+
+```sql
+CREATE DATABASE IF NOT EXISTS lifeos;
+EXIT;
+```
 
 ### Installation
 
 ```bash
-git clone https://github.com/sahilkriplani/lifeos-backend.git
-cd lifeos-backend
+cd backend
 python3 -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
+source venv/bin/activate
 pip install -r requirements.txt
-```
-
-### Run Migrations
-
-```bash
-alembic upgrade head
 ```
 
 ### Start the Server
 
 ```bash
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --port 8000
 ```
 
-API base: [http://localhost:8000](http://localhost:8000)  
-Swagger docs: [http://localhost:8000/docs](http://localhost:8000/docs)  
-ReDoc: [http://localhost:8000/redoc](http://localhost:8000/redoc)
+API base: [http://localhost:8000](http://localhost:8000)
+Swagger docs: [http://localhost:8000/docs](http://localhost:8000/docs)
+
+> Tables are auto-created on startup via `Base.metadata.create_all()`
 
 ---
 
 ## 🔑 Environment Variables
 
-Create a `.env` file in the root:
+Create a `.env` file in `backend/`:
 
 ```env
-DATABASE_URL=mysql+pymysql://root:password@localhost/lifeos
+DATABASE_URL=mysql+pymysql://root:YOUR_PASSWORD@localhost/lifeos
 SECRET_KEY=your-super-secret-key-change-this-in-production
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
+FRONTEND_URL=http://localhost:3000
 ```
 
 ---
@@ -165,10 +157,11 @@ CREATE TABLE users (
   id         INT AUTO_INCREMENT PRIMARY KEY,
   name       VARCHAR(100) NOT NULL,
   email      VARCHAR(150) UNIQUE NOT NULL,
-  password   VARCHAR(255) NOT NULL,
+  password   VARCHAR(255) NOT NULL,        -- bcrypt hashed
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Coming in Phase 3+
 CREATE TABLE tasks (
   id             INT AUTO_INCREMENT PRIMARY KEY,
   user_id        INT NOT NULL,
@@ -212,121 +205,140 @@ CREATE TABLE streaks (
 );
 ```
 
-> Schema is managed via Alembic. Do not alter tables manually in production.
-
 ---
 
 ## 🔌 API Reference
 
 Base URL: `/api/v1`
 
-### Auth
-| Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/auth/register` | Create new account |
-| `POST` | `/auth/login` | Login, sets httpOnly cookie |
-| `POST` | `/auth/logout` | Clears auth cookie |
-| `GET` | `/auth/me` | Get current user from cookie |
+### Auth ✅ (Implemented)
+| Method | Endpoint | Auth Required | Description |
+|---|---|---|---|
+| `POST` | `/auth/register` | No | Create account, sets httpOnly cookie |
+| `POST` | `/auth/login` | No | Login, sets httpOnly cookie |
+| `POST` | `/auth/logout` | No | Clears auth cookie |
+| `GET` | `/auth/me` | Yes | Get current user from cookie |
 
-### Tasks (Planner)
+### Tasks — Planner (Coming Phase 3)
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/tasks?date=YYYY-MM-DD` | Fetch tasks for a date |
 | `POST` | `/tasks` | Create a task |
-| `PATCH` | `/tasks/:id` | Update task (title, done, priority) |
+| `PATCH` | `/tasks/:id` | Update task |
 | `DELETE` | `/tasks/:id` | Delete a task |
 
-### DSA
+### DSA (Coming Phase 4)
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/dsa/logs?from=&to=` | Fetch logs in date range |
 | `POST` | `/dsa/logs` | Log a solved problem |
-| `GET` | `/dsa/stats` | Aggregated stats (by topic, difficulty) |
-| `DELETE` | `/dsa/logs/:id` | Delete a log entry |
+| `GET` | `/dsa/stats` | Aggregated stats |
+| `DELETE` | `/dsa/logs/:id` | Delete a log |
 
-### Fitness
+### Fitness (Coming Phase 5)
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/fitness/logs?from=&to=` | Fetch logs in date range |
-| `POST` | `/fitness/logs` | Add a daily fitness log |
-| `PATCH` | `/fitness/logs/:id` | Update a fitness log |
-| `GET` | `/fitness/stats` | Aggregated fitness stats |
+| `GET` | `/fitness/logs?from=&to=` | Fetch logs |
+| `POST` | `/fitness/logs` | Add daily log |
+| `PATCH` | `/fitness/logs/:id` | Update log |
+| `GET` | `/fitness/stats` | Aggregated stats |
 
-### Streaks
+### Streaks (Coming Phase 5)
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/streaks/me` | Get current and best streak |
 | `POST` | `/streaks/checkin` | Record today's activity |
 
-All responses follow the shape:
-```json
-{
-  "success": true,
-  "data": { ... },
-  "message": "OK"
-}
+---
+
+## 🔐 Authentication Flow
+
+```
+POST /auth/register or /auth/login
+         │
+         ▼
+  Validate request (Pydantic)
+         │
+         ▼
+  Hash password (bcrypt) / Verify password
+         │
+         ▼
+  Create JWT: { sub: user_id, exp: now + 1440min }
+         │
+         ▼
+  Set httpOnly cookie: access_token=<jwt>
+         │
+         ▼
+  Return { success, message, user } — password never in response
+```
+
+**Protected route flow:**
+```
+Request with cookie
+         │
+         ▼
+  get_current_user dependency
+         │
+         ▼
+  Decode JWT from cookie
+         │
+         ▼
+  Query DB for user
+         │
+         ▼
+  Inject user into route handler
 ```
 
 ---
 
-## 🔐 Authentication
+## 📦 Dependencies
 
-- On login, a signed JWT is stored as an httpOnly, Secure, SameSite=Lax cookie
-- All protected routes use a `get_current_user` dependency that decodes the cookie
-- Tokens expire after `ACCESS_TOKEN_EXPIRE_MINUTES` (default: 1440 = 24 hours)
-- Passwords are hashed with bcrypt before storage — plaintext is never persisted
-
----
-
-## 📌 Common Commands
-
-```bash
-# Run dev server
-uvicorn app.main:app --reload
-
-# Create a new migration
-alembic revision --autogenerate -m "describe change"
-
-# Apply migrations
-alembic upgrade head
-
-# Rollback one migration
-alembic downgrade -1
-
-# Check current migration state
-alembic current
+```
+fastapi==0.128.8
+uvicorn==0.39.0
+sqlalchemy==2.x
+pymysql==1.x
+python-jose[cryptography]==3.5.0
+passlib==1.7.4
+bcrypt==4.0.1          # Pinned — required for Python 3.9 compatibility
+pydantic==2.x
+pydantic-settings==2.x
+pydantic[email]        # Required for EmailStr validation
+python-dotenv
 ```
 
 ---
 
 ## 🗺️ Roadmap
 
-- [ ] Phase 7 — Core API setup (auth, tasks, DSA, fitness, streaks)
-- [ ] Phase 8 — Auth with httpOnly JWT cookies
-- [ ] Phase 9 — Stats aggregation endpoints
-- [ ] Phase 10 — Deployment (Railway / Render / EC2)
+- [x] Phase 1 — Project setup, venv, folder structure
+- [x] Phase 2 — Auth (register, login, logout, /me) with JWT httpOnly cookies
+- [ ] Phase 3 — Planner API (tasks CRUD)
+- [ ] Phase 4 — DSA API (logs + stats)
+- [ ] Phase 5 — Fitness + Streaks API
+- [ ] Phase 6 — Alembic migrations setup
+- [ ] Phase 7 — Deployment (Railway / Render)
 
 ---
 
 ## 🧠 Engineering Principles
 
 - **Thin routers** — route handlers only parse requests and return responses
-- **Service layer** — all business logic lives in services, independently testable
 - **Fail fast** — Pydantic v2 validates at the boundary; bad data never reaches the DB
-- **Secure by default** — httpOnly cookies, bcrypt, no sensitive data in responses
-- **Reproducible** — Alembic migrations ensure schema consistency across environments
+- **Secure by default** — httpOnly cookies, bcrypt, password never returned in responses
+- **Auto table creation** — `Base.metadata.create_all()` on startup for dev convenience
 
 ---
 
 ## 🔗 Related
 
-- [LifeOS Frontend](https://github.com/sahilkriplani/lifeos-frontend) — Next.js 16 + React 19 dashboard
+- [LifeOS Frontend](https://github.com/sahilkriplani/lifeos-frontend) — Next.js 16 + React 19
 
 ---
 
 ## 👤 Author
 
-**Sahil Kriplani** — Full-Stack Developer, Ahmedabad 🇮🇳  
+**Sahil Kriplani** — Full-Stack Developer, Ahmedabad 🇮🇳
 GitHub: [@sahilkriplani](https://github.com/sahilkriplani)
 
 > *"Clean APIs. Scalable systems. Production mindset."*

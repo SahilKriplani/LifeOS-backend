@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
-from app.schemas.user import RegisterRequest, LoginRequest, AuthResponse, UserResponse
+from app.schemas.user import RegisterRequest, LoginRequest, AuthResponse, UserResponse,  UpdateProfileRequest, ChangePasswordRequest
 from app.utils.auth import hash_password, verify_password, create_access_token, get_current_user
 from app.config import settings
 
@@ -91,3 +91,35 @@ def me(
         message="Authenticated",
         user=UserResponse.model_validate(current_user),
     )
+    
+
+@router.patch("/update-profile", response_model=AuthResponse)
+def update_profile(
+    payload: UpdateProfileRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if payload.name:
+        current_user.name = payload.name
+    db.commit()
+    db.refresh(current_user)
+    return AuthResponse(
+        success=True,
+        message="Profile updated",
+        user=UserResponse.model_validate(current_user),
+    )
+
+@router.patch("/change-password")
+def change_password(
+    payload: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not verify_password(payload.current_password, current_user.password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect"
+        )
+    current_user.password = hash_password(payload.new_password)
+    db.commit()
+    return {"success": True, "message": "Password changed successfully"}

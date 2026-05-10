@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
 from typing import Optional
 
@@ -27,3 +27,10 @@ class AuthResponse(BaseModel):
     success: bool
     message: str
     user: Optional[UserResponse] = None
+    
+class UpdateProfileRequest(BaseModel):
+    name: Optional[str] = None
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password:     str = Field(min_length=6)

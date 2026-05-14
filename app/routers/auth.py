@@ -36,8 +36,9 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
         value=token,
         httponly=True,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        samesite="lax",
-        secure=False,   # set True in production (HTTPS)
+        samesite="none",
+        secure=True,
+        path="/",
     )
 
     return AuthResponse(
@@ -65,7 +66,7 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
         httponly=True,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         samesite="lax",
-        secure=False,
+        secure=False,   # set True in production (HTTPS)
     )
 
     return AuthResponse(
@@ -77,7 +78,12 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
 # ─── Logout ───────────────────────────────────────────────────────────────────
 @router.post("/logout")
 def logout(response: Response):
-    response.delete_cookie("access_token")
+    response.delete_cookie(
+    key="access_token",
+    path="/",
+    samesite="none",
+    secure=True,
+)
     return {"success": True, "message": "Logged out successfully"}
 
 # ─── Me ───────────────────────────────────────────────────────────────────────

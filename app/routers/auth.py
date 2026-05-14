@@ -43,8 +43,9 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
 
     return AuthResponse(
         success=True,
-        message="Account created successfully",
+        message="Logged in successfully",
         user=UserResponse.model_validate(user),
+        token=token,
     )
 
 # ─── Login ────────────────────────────────────────────────────────────────────

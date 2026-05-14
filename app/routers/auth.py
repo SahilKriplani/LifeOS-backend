@@ -74,6 +74,7 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
         success=True,
         message="Logged in successfully",
         user=UserResponse.model_validate(user),
+        token=token,
     )
 
 # ─── Logout ───────────────────────────────────────────────────────────────────

@@ -27,7 +27,7 @@ class AuthResponse(BaseModel):
     success: bool
     message: str
     user: UserResponse
-    token: str | None = None
+    token: Optional[str] = None
     
 class UpdateProfileRequest(BaseModel):
     name: Optional[str] = None

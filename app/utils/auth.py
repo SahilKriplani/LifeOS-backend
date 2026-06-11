@@ -2,7 +2,8 @@ from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from fastapi import HTTPException, status, Cookie, Depends
+from fastapi import HTTPException, status, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
@@ -36,9 +37,11 @@ def decode_access_token(token: str) -> Optional[dict]:
     except JWTError:
         return None
 
-# ─── Get current user from cookie ────────────────────────────────────────────
+# ─── Get current user from Authorization: Bearer header ──────────────────────
+bearer_scheme = HTTPBearer(auto_error=False)
+
 def get_current_user(
-    access_token: Optional[str] = Cookie(default=None),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ):
     from app.models.user import User
@@ -48,10 +51,10 @@ def get_current_user(
         detail="Not authenticated",
     )
 
-    if not access_token:
+    if credentials is None or not credentials.credentials:
         raise credentials_exception
 
-    payload = decode_access_token(access_token)
+    payload = decode_access_token(credentials.credentials)
     if payload is None:
         raise credentials_exception
 

@@ -14,7 +14,7 @@
 LifeOS Backend is the REST API layer for the [LifeOS Frontend](https://github.com/sahilkriplani/lifeos-frontend). Built with FastAPI and a layered architecture (Routers → Services → Models), it handles all business logic, data persistence, and authentication for the LifeOS platform.
 
 **Domains served:**
-- 🔐 **Auth** — Register, login, logout via JWT in httpOnly cookies
+- 🔐 **Auth** — Register, login, logout via stateless JWT Bearer tokens
 - 📅 **Planner** — Task CRUD with priority levels and date-based filtering
 - 📊 **DSA** — Problem logs with platform, difficulty, topic tracking and stats
 - 🏋️ **Fitness** — Daily weight, calorie, and step logs with aggregated stats
@@ -30,7 +30,7 @@ LifeOS Backend is the REST API layer for the [LifeOS Frontend](https://github.co
 | Language | Python | 3.9+ |
 | ORM | SQLAlchemy | 2.x |
 | Validation | Pydantic | v2 |
-| Authentication | JWT (httpOnly cookies) | python-jose 3.5.0 |
+| Authentication | JWT (Bearer header) | python-jose 3.5.0 |
 | Password Hashing | bcrypt | passlib 1.7.4 + bcrypt 4.0.1 |
 | Database | MySQL | 9.x |
 | Server | Uvicorn | 0.39.0 |
@@ -59,7 +59,7 @@ HTTP Request
 **Key decisions:**
 - **Layered architecture** — routers never contain business logic; services never know about HTTP
 - **Pydantic v2** — strict request/response schema validation with clear error messages
-- **Stateless JWT auth** — tokens stored in httpOnly cookies, no server-side session
+- **Stateless JWT auth** — token returned in the response body and validated from the `Authorization: Bearer` header (`HTTPBearer`), no server-side session
 - **Response wrapper** — uniform `{ success, data, message }` shape across all endpoints
 - **bcrypt 4.0.1 pinned** — required for Python 3.9 compatibility with passlib
 
@@ -214,10 +214,10 @@ Base URL: `/api/v1`
 ### Auth ✅ (Implemented)
 | Method | Endpoint | Auth Required | Description |
 |---|---|---|---|
-| `POST` | `/auth/register` | No | Create account, sets httpOnly cookie |
-| `POST` | `/auth/login` | No | Login, sets httpOnly cookie |
-| `POST` | `/auth/logout` | No | Clears auth cookie |
-| `GET` | `/auth/me` | Yes | Get current user from cookie |
+| `POST` | `/auth/register` | No | Create account, returns JWT in body |
+| `POST` | `/auth/login` | No | Login, returns JWT in body |
+| `POST` | `/auth/logout` | No | Stateless — client discards the token |
+| `GET` | `/auth/me` | Yes | Get current user from Bearer token |
 
 ### Tasks — Planner (Coming Phase 3)
 | Method | Endpoint | Description |
@@ -266,21 +266,19 @@ POST /auth/register or /auth/login
   Create JWT: { sub: user_id, exp: now + 1440min }
          │
          ▼
-  Set httpOnly cookie: access_token=<jwt>
-         │
-         ▼
-  Return { success, message, user } — password never in response
+  Return { success, message, token, user } — password never in response
+  (client stores the token and sends it as Authorization: Bearer)
 ```
 
 **Protected route flow:**
 ```
-Request with cookie
+Request with Authorization: Bearer <jwt>
          │
          ▼
-  get_current_user dependency
+  get_current_user dependency (HTTPBearer)
          │
          ▼
-  Decode JWT from cookie
+  Decode + validate JWT from the header
          │
          ▼
   Query DB for user
@@ -312,7 +310,7 @@ python-dotenv
 ## 🗺️ Roadmap
 
 - [x] Phase 1 — Project setup, venv, folder structure
-- [x] Phase 2 — Auth (register, login, logout, /me) with JWT httpOnly cookies
+- [x] Phase 2 — Auth (register, login, logout, /me) with JWT Bearer tokens
 - [ ] Phase 3 — Planner API (tasks CRUD)
 - [ ] Phase 4 — DSA API (logs + stats)
 - [ ] Phase 5 — Fitness + Streaks API
@@ -325,7 +323,7 @@ python-dotenv
 
 - **Thin routers** — route handlers only parse requests and return responses
 - **Fail fast** — Pydantic v2 validates at the boundary; bad data never reaches the DB
-- **Secure by default** — httpOnly cookies, bcrypt, password never returned in responses
+- **Secure by default** — stateless JWT Bearer auth, bcrypt, password never returned in responses
 - **Auto table creation** — `Base.metadata.create_all()` on startup for dev convenience
 
 ---

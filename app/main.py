@@ -20,9 +20,12 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
-        "https://life-os-web-git-main-sahil-kriplani-s-projects.vercel.app",
         "https://life-os-web-rosy.vercel.app",
     ],
+    # Match every Vercel URL for this project (production alias + per-deploy
+    # preview URLs), so a deploy on a new preview/alias domain doesn't 500 the
+    # browser with a CORS "Network Error" the way a hardcoded list does.
+    allow_origin_regex=r"https://life-os-web.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

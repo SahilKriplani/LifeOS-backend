@@ -1,12 +1,23 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.database import engine, Base
-from app.routers import auth, tasks, dsa, fitness, streaks, goals
-from app.models import User, Task, DSALog, FitnessLog, Streak,Goal
+from app.database import engine, Base, SessionLocal
+from app.routers import auth, tasks, dsa, fitness, streaks, goals, exercises, workouts
+from app.models import (
+    User, Task, DSALog, FitnessLog, Streak, Goal,
+    Exercise, WorkoutLog, WorkoutSet,
+)
+from app.services.workout_service import seed_global_exercises
 
 # ─── Create all tables ────────────────────────────────────────────────────────
 Base.metadata.create_all(bind=engine)
+
+# ─── Seed the global exercise library (idempotent) ────────────────────────────
+_seed_db = SessionLocal()
+try:
+    seed_global_exercises(_seed_db)
+finally:
+    _seed_db.close()
 
 # ─── App ──────────────────────────────────────────────────────────────────────
 app = FastAPI(
@@ -38,6 +49,8 @@ app.include_router(dsa.router,      prefix="/api/v1")
 app.include_router(fitness.router,  prefix="/api/v1")
 app.include_router(streaks.router,  prefix="/api/v1")
 app.include_router(goals.router, prefix="/api/v1")
+app.include_router(exercises.router, prefix="/api/v1")
+app.include_router(workouts.router,  prefix="/api/v1")
 
 # ─── Health check ─────────────────────────────────────────────────────────────
 @app.get("/")

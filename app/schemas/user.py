@@ -13,6 +13,11 @@ class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
+# ─── Google SSO ───────────────────────────────────────────────────────────────
+class GoogleAuthRequest(BaseModel):
+    # The ID token (JWT credential) returned by Google Identity Services.
+    credential: str
+
 # ─── User response (never expose password) ───────────────────────────────────
 class UserResponse(BaseModel):
     id: int

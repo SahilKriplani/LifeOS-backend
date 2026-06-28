@@ -4,3 +4,6 @@ from app.models.dsa_log import DSALog
 from app.models.fitness_log import FitnessLog
 from app.models.streak import Streak
 from app.models.goal import Goal
+from app.models.exercise import Exercise
+from app.models.workout_log import WorkoutLog
+from app.models.workout_set import WorkoutSet

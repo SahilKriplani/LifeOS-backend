@@ -22,7 +22,9 @@ def get_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    stats = fitness_service.get_stats(db, current_user.id)
+    stats = fitness_service.get_stats(
+        db, current_user.id, target_weight=current_user.target_weight_kg
+    )
     return FitnessStatsWrapped(success=True, data=stats)
 
 @router.get("/logs", response_model=FitnessLogListResponse)

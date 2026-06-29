@@ -4,7 +4,7 @@ from app.config import settings
 from app.database import engine, Base, SessionLocal
 from app.routers import auth, tasks, dsa, fitness, streaks, goals, exercises, workouts
 from app.models import (
-    User, Task, DSALog, FitnessLog, Streak, Goal,
+    User, OtpCode, Task, DSALog, FitnessLog, Streak, ActivityDay, Goal,
     Exercise, WorkoutLog, WorkoutSet,
 )
 from app.services.workout_service import seed_global_exercises

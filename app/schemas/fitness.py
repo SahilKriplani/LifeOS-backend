@@ -29,6 +29,8 @@ class FitnessLogResponse(BaseModel):
 
 class FitnessStatsResponse(BaseModel):
     current_weight:   Optional[Decimal]
+    start_weight:     Optional[Decimal]  # earliest logged weight (goal baseline)
+    target_weight:    Optional[Decimal]  # user's goal weight, None until set
     average_calories: Optional[float]
     average_steps:    Optional[float]
     total_logs:       int

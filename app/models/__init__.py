@@ -9,3 +9,6 @@ from app.models.goal import Goal
 from app.models.exercise import Exercise
 from app.models.workout_log import WorkoutLog
 from app.models.workout_set import WorkoutSet
+from app.models.account import Account
+from app.models.category import Category
+from app.models.transaction import Transaction

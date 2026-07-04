@@ -2,10 +2,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import engine, Base, SessionLocal
-from app.routers import auth, tasks, dsa, fitness, streaks, goals, exercises, workouts
+from app.routers import (
+    auth, tasks, dsa, fitness, streaks, goals, exercises, workouts,
+    transactions, accounts, categories,
+)
 from app.models import (
     User, OtpCode, Task, DSALog, FitnessLog, Streak, ActivityDay, Goal,
-    Exercise, WorkoutLog, WorkoutSet,
+    Exercise, WorkoutLog, WorkoutSet, Account, Category, Transaction,
 )
 from app.services.workout_service import seed_global_exercises
 
@@ -51,6 +54,9 @@ app.include_router(streaks.router,  prefix="/api/v1")
 app.include_router(goals.router, prefix="/api/v1")
 app.include_router(exercises.router, prefix="/api/v1")
 app.include_router(workouts.router,  prefix="/api/v1")
+app.include_router(transactions.router, prefix="/api/v1")
+app.include_router(accounts.router,     prefix="/api/v1")
+app.include_router(categories.router,   prefix="/api/v1")
 
 # ─── Health check ─────────────────────────────────────────────────────────────
 @app.get("/")

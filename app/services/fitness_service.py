@@ -64,7 +64,7 @@ def delete_log(db: Session, user_id: int, log_id: int):
     db.commit()
     return True
 
-def get_stats(db: Session, user_id: int) -> FitnessStatsResponse:
+def get_stats(db: Session, user_id: int, target_weight=None) -> FitnessStatsResponse:
     logs = db.query(FitnessLog).filter(
         FitnessLog.user_id == user_id
     ).order_by(FitnessLog.log_date.desc()).all()
@@ -72,6 +72,8 @@ def get_stats(db: Session, user_id: int) -> FitnessStatsResponse:
     if not logs:
         return FitnessStatsResponse(
             current_weight   = None,
+            start_weight     = None,
+            target_weight    = target_weight,
             average_calories = None,
             average_steps    = None,
             total_logs       = 0,
@@ -88,6 +90,8 @@ def get_stats(db: Session, user_id: int) -> FitnessStatsResponse:
 
     return FitnessStatsResponse(
         current_weight   = current_weight,
+        start_weight     = oldest_weight,
+        target_weight    = target_weight,
         average_calories = sum(calories) / len(calories) if calories else None,
         average_steps    = sum(steps)    / len(steps)    if steps    else None,
         total_logs       = len(logs),

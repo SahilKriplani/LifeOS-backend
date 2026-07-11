@@ -35,6 +35,9 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "https://life-os-web-rosy.vercel.app",
+        "https://builtbysahil.com",
+        "https://www.builtbysahil.com",
+        "https://lifeos.builtbysahil.com",
     ],
     # Match every Vercel URL for this project (production alias + per-deploy
     # preview URLs), so a deploy on a new preview/alias domain doesn't 500 the
